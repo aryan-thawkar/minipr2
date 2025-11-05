@@ -1,0 +1,409 @@
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import json
+import serial
+import time
+from datetime import datetime
+import plotly.express as px
+import plotly.utils
+import pandas as pd
+import atexit
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Global serial connection
+ser = None
+
+def find_arduino_port():
+    ports = list(serial.tools.list_ports.comports())
+    
+    if not ports:
+        print("No serial ports found!")
+        return None
+    
+    print("\nAvailable ports:")
+    for port in ports:
+        print(f"Port: {port.device}")
+        print(f"Description: {port.description}")
+        print(f"Hardware ID: {port.hwid}")
+        print("-" * 50)
+    
+    # Look for Arduino or CH340
+    for port in ports:
+        if any(id in port.description.lower() for id in ["ch340", "arduino", "usb serial"]):
+            print(f"\nFound likely Arduino port: {port.device}")
+            return port.device
+    
+    print(f"\nNo Arduino-specific port found, using first available: {ports[0].device}")
+    return ports[0].device
+
+def force_release_com_port(port):
+    try:
+        # Run Windows command to release the port
+        import subprocess
+        port_num = port.replace('COM', '')
+        cmd = f'net use com{port_num} /delete'
+        subprocess.run(cmd, shell=True, capture_output=True)
+        
+        # Additional Windows-specific port release command
+        cmd = f'mode {port} BAUD=9600 PARITY=n DATA=8 STOP=1 to=off dtr=off rts=off'
+        subprocess.run(cmd, shell=True, capture_output=True)
+        
+        return True
+    except Exception as e:
+        print(f"Error releasing port: {e}")
+        return False
+
+def initialize_serial():
+    global ser
+    
+    # Find the correct port
+    port = find_arduino_port()
+    if not port:
+        print("No serial ports available!")
+        return False
+    
+    print(f"Attempting to connect to {port}")
+    
+    try:
+        # Close existing connection if any
+        if ser is not None:
+            try:
+                ser.close()
+            except:
+                pass
+            ser = None
+        
+        # Create new serial connection with minimal settings
+        ser = serial.Serial(
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1
+        )
+        
+        # Verify port is open
+        if not ser.is_open:
+            ser.open()
+        
+        # Basic port test
+        ser.write(b'\r\n')
+        time.sleep(0.1)
+        
+        print(f"Successfully connected to {port}")
+        return True
+    
+    except Exception as e:
+        print(f"Failed to initialize serial: {str(e)}")
+        if ser is not None:
+            try:
+                ser.close()
+            except:
+                pass
+            ser = None
+        return False
+            
+        except Exception as e:
+            print(f"Attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+            if ser is not None:
+                try:
+                    ser.close()
+                    ser = None
+                except:
+                    pass
+            time.sleep(retry_delay)
+    
+    print("Failed to initialize serial port after all retries")
+    return False
+
+def close_serial():
+    global ser
+    try:
+        if ser is not None and ser.is_open:
+            ser.close()
+    except Exception as e:
+        print(f"Error closing serial: {e}")
+
+@atexit.register
+def cleanup():
+    close_serial()
+
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = user_data['phone']
+        self.name = user_data['name']
+        self.fingerprint_id = user_data['fingerprint_id']
+        self.balance = user_data['balance']
+        self.transactions = user_data['transactions']
+
+def load_users():
+    with open('bank_data.json', 'r') as file:
+        data = json.load(file)
+    return data['users']
+
+def save_users(users):
+    with open('bank_data.json', 'w') as file:
+        json.dump({'users': users}, file, indent=4)
+
+@login_manager.user_loader
+def load_user(user_id):
+    users = load_users()
+    user_data = next((user for user in users if user['phone'] == user_id), None)
+    if user_data:
+        return User(user_data)
+    return None
+
+def verify_fingerprint():
+    if not initialize_serial():
+        return None, 0
+        
+    try:
+        # Send verify command
+        ser.write(b'V')
+        print("Sent verify command")
+        
+        # Read response with timeout
+        start_time = time.time()
+        while time.time() - start_time < 10:  # 10-second timeout
+            if ser.in_waiting:
+                response = ser.readline().decode('utf-8').strip()
+                print(f"Received: {response}")
+                
+                if "Found ID" in response:
+                    fingerprint_id = int(response.split('#')[1].split()[0])
+                    confidence = int(response.split('of')[1])
+                    return fingerprint_id, confidence
+                elif "Did not find a match" in response:
+                    return None, 0
+                    
+            time.sleep(0.1)
+            
+        print("Verification timed out")
+        return None, 0
+        
+    except Exception as e:
+        print(f"Error during verification: {str(e)}")
+        return None, 0
+        
+    finally:
+        try:
+            if ser is not None and ser.is_open:
+                ser.close()
+        except:
+            pass
+
+def enroll_fingerprint(finger_id):
+    global ser
+    with serial_lock:
+        try:
+            # Always try to initialize a new connection
+            if ser is not None:
+                try:
+                    ser.close()
+                except:
+                    pass
+                ser = None
+            
+            if not initialize_serial():
+                print("Failed to initialize serial connection")
+                return False
+            
+            # Send enrollment command with ID
+            command = f'E{finger_id}'.encode()
+            print(f"Sending command: {command}")
+            ser.write(command)
+            ser.flush()
+            
+            start_time = time.time()
+            while time.time() - start_time < 30:  # 30-second timeout for enrollment
+                try:
+                    if ser.is_open and ser.in_waiting:
+                        response = ser.readline().decode('utf-8').strip()
+                        print(f"Received: {response}")
+                        if "Stored!" in response:
+                            return True
+                        elif "Failed" in response:
+                            return False
+                except Exception as e:
+                    print(f"Error reading from serial: {e}")
+                    break
+                time.sleep(0.1)
+            
+            print("Enrollment timed out")
+            return False
+            
+        except Exception as e:
+            print(f"Enrollment error: {e}")
+            return False
+        finally:
+            try:
+                if ser is not None and ser.is_open:
+                    ser.close()
+                    ser = None
+            except:
+                pass
+    return False
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        phone = request.form['phone']
+        users = load_users()
+        user_data = next((user for user in users if user['phone'] == phone), None)
+        
+        if user_data:
+            print("Verifying fingerprint...")
+            fingerprint_id, confidence = verify_fingerprint()
+            
+            if fingerprint_id is not None and fingerprint_id == user_data['fingerprint_id']:
+                user = User(user_data)
+                login_user(user)
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Fingerprint verification failed!')
+        else:
+            flash('User not found!')
+            
+    return render_template('login.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    users = load_users()
+    user_data = next((user for user in users if user['phone'] == current_user.id), None)
+    
+    # Create transaction history chart
+    if user_data and user_data['transactions']:
+        df = pd.DataFrame(user_data['transactions'])
+        df['date'] = pd.to_datetime(df['date'])
+        fig = px.line(df, x='date', y='balance', title='Balance History')
+        graph_json = plotly.utils.PlotlyJSONEncoder().encode(fig)
+    else:
+        graph_json = None
+    
+    return render_template('dashboard.html', 
+                         user=user_data, 
+                         graph_json=graph_json)
+
+@app.route('/make_payment', methods=['GET', 'POST'])
+@login_required
+def make_payment():
+    if request.method == 'POST':
+        amount = float(request.form['amount'])
+        users = load_users()
+        user_idx = next((idx for idx, user in enumerate(users) 
+                        if user['phone'] == current_user.id), None)
+        
+        if user_idx is not None:
+            if users[user_idx]['balance'] >= amount:
+                # Verify fingerprint again for security
+                fingerprint_id, confidence = verify_fingerprint()
+                
+                if fingerprint_id is not None and fingerprint_id == users[user_idx]['fingerprint_id']:
+                    # Process payment
+                    users[user_idx]['balance'] -= amount
+                    transaction = {
+                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "amount": amount,
+                        "type": "payment",
+                        "balance": users[user_idx]['balance']
+                    }
+                    users[user_idx]['transactions'].append(transaction)
+                    save_users(users)
+                    flash('Payment successful!')
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('Fingerprint verification failed!')
+            else:
+                flash('Insufficient balance!')
+        else:
+            flash('User not found!')
+            
+    return render_template('make_payment.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            phone = request.form['phone']
+            initial_balance = float(request.form['initial_balance'])
+        except ValueError:
+            flash('Invalid input values. Please check your entries.')
+            return render_template('register.html')
+
+        # Load existing users
+        users = load_users()
+        
+        # Check if phone number already exists
+        if any(user['phone'] == phone for user in users):
+            flash('Phone number already registered!')
+            return render_template('register.html')
+
+        # Find the next available fingerprint ID
+        used_ids = {user['fingerprint_id'] for user in users}
+        next_id = 0
+        while next_id in used_ids:
+            next_id += 1
+
+        # Try to enroll fingerprint
+        print(f"Enrolling fingerprint with ID: {next_id}")
+        
+        # Initialize serial connection
+        if not initialize_serial():
+            flash('Could not connect to fingerprint sensor. Please try again.')
+            return render_template('register.html')
+            
+        enrollment_result = enroll_fingerprint(next_id)
+        
+        # Close serial connection after enrollment
+        close_serial()
+        
+        if enrollment_result:
+            # Create new user
+            new_user = {
+                "phone": phone,
+                "name": name,
+                "fingerprint_id": next_id,
+                "balance": initial_balance,
+                "transactions": [{
+                    "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "amount": initial_balance,
+                    "type": "deposit",
+                    "balance": initial_balance
+                }]
+            }
+            
+            # Add user to database
+            users.append(new_user)
+            save_users(users)
+            
+            flash('Registration successful! You can now login.')
+            return redirect(url_for('login'))
+        else:
+            flash('Fingerprint enrollment failed! Please try again.')
+            return render_template('register.html')
+
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    initialize_serial()
+    app.run(debug=True)

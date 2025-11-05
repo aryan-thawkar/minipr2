@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Login</h4>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages() %}
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-danger">{{ message }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone Number / Admin ID</label>
+                                <input type="text" class="form-control" id="phone" name="phone" required>
+                            </div>
+                            {% if show_password %}
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Admin Password</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary">
+                                {% if show_password %}Login as Admin{% else %}Verify Fingerprint & Login{% endif %}
+                            </button>
+                        </form>
+                        <div class="mt-3 text-center">
+                            {% if show_password %}
+                            <a href="{{ url_for('login') }}" class="text-decoration-none">User Login</a>
+                            {% else %}
+                            <a href="{{ url_for('login', admin='true') }}" class="text-decoration-none">Admin Login</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

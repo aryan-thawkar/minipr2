@@ -1,0 +1,6 @@
+{
+    "sketch": "fingerprint_arduino_bridge.ino",
+    "board": "arduino:avr:uno",
+    "port": "COM6",
+    "output": "../build"
+}

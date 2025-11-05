@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Register New User</h4>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages() %}
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-info">{{ message }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone Number</label>
+                                <input type="text" class="form-control" id="phone" name="phone" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="initial_balance" class="form-label">Initial Balance (₹)</label>
+                                <input type="number" step="0.01" class="form-control" id="initial_balance" name="initial_balance" required>
+                            </div>
+                            <div class="alert alert-info">
+                                <h5>Fingerprint Enrollment Instructions:</h5>
+                                <ol>
+                                    <li>After clicking "Register", you'll be asked to place your finger on the sensor.</li>
+                                    <li>Place your finger and hold steady until asked to remove it.</li>
+                                    <li>When prompted, place the same finger again for verification.</li>
+                                    <li>The process will complete automatically if successful.</li>
+                                </ol>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Register & Enroll Fingerprint</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

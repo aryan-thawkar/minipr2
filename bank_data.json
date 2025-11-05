@@ -1,0 +1,79 @@
+{
+    "admin": {
+        "phone": "admin",
+        "name": "System Admin",
+        "password": "admin123",
+        "balance": 100.0,
+        "transactions": [
+            {
+                "date": "2025-11-06 00:15:28",
+                "amount": 96.0,
+                "type": "receive",
+                "from": "aryan",
+                "balance": 96.0
+            },
+            {
+                "date": "2025-11-06 00:21:22",
+                "amount": 4.0,
+                "type": "receive",
+                "from": "aryan",
+                "balance": 100.0
+            }
+        ]
+    },
+    "users": [
+        {
+            "phone": "9876543210",
+            "name": "John Doe",
+            "fingerprint_id": 3,
+            "balance": 1000.0,
+            "transactions": []
+        },
+        {
+            "phone": "9876543211",
+            "name": "Jane Smith",
+            "fingerprint_id": 1,
+            "balance": 1500.0,
+            "transactions": []
+        },
+        {
+            "phone": "9876543212",
+            "name": "Bob Wilson",
+            "fingerprint_id": 2,
+            "balance": 2000.0,
+            "transactions": []
+        },
+        {
+            "phone": "9699835356",
+            "name": "aryan",
+            "fingerprint_id": 0,
+            "balance": 9800.0,
+            "transactions": [
+                {
+                    "date": "2025-11-06 00:02:22",
+                    "amount": 10000.0,
+                    "type": "deposit",
+                    "balance": 10000.0
+                },
+                {
+                    "date": "2025-11-06 00:04:12",
+                    "amount": 100.0,
+                    "type": "payment",
+                    "balance": 9900.0
+                },
+                {
+                    "date": "2025-11-06 00:15:28",
+                    "amount": 96.0,
+                    "type": "payment",
+                    "balance": 9804.0
+                },
+                {
+                    "date": "2025-11-06 00:21:22",
+                    "amount": 4.0,
+                    "type": "payment",
+                    "balance": 9800.0
+                }
+            ]
+        }
+    ]
+}
