@@ -3,7 +3,7 @@
         "phone": "admin",
         "name": "System Admin",
         "password": "admin123",
-        "balance": 100.0,
+        "balance": 1423.0,
         "transactions": [
             {
                 "date": "2025-11-06 00:15:28",
@@ -18,36 +18,43 @@
                 "type": "receive",
                 "from": "aryan",
                 "balance": 100.0
+            },
+            {
+                "date": "2025-11-12 12:33:52",
+                "amount": 1000.0,
+                "type": "receive",
+                "from": "aryan",
+                "balance": 1100.0
+            },
+            {
+                "date": "2025-11-12 12:38:07",
+                "amount": 200.0,
+                "type": "receive",
+                "from": "aryan",
+                "balance": 1300.0
+            },
+            {
+                "date": "2025-11-12 13:05:56",
+                "amount": 100.0,
+                "type": "receive",
+                "from": "aryan",
+                "balance": 1400.0
+            },
+            {
+                "date": "2025-11-12 13:10:34",
+                "amount": 23.0,
+                "type": "receive",
+                "from": "Nikhil Motghare",
+                "balance": 1423.0
             }
         ]
     },
     "users": [
         {
-            "phone": "9876543210",
-            "name": "John Doe",
-            "fingerprint_id": 3,
-            "balance": 1000.0,
-            "transactions": []
-        },
-        {
-            "phone": "9876543211",
-            "name": "Jane Smith",
-            "fingerprint_id": 1,
-            "balance": 1500.0,
-            "transactions": []
-        },
-        {
-            "phone": "9876543212",
-            "name": "Bob Wilson",
-            "fingerprint_id": 2,
-            "balance": 2000.0,
-            "transactions": []
-        },
-        {
             "phone": "9699835356",
             "name": "aryan",
             "fingerprint_id": 0,
-            "balance": 9800.0,
+            "balance": 8500.0,
             "transactions": [
                 {
                     "date": "2025-11-06 00:02:22",
@@ -72,6 +79,44 @@
                     "amount": 4.0,
                     "type": "payment",
                     "balance": 9800.0
+                },
+                {
+                    "date": "2025-11-12 12:33:52",
+                    "amount": 1000.0,
+                    "type": "payment",
+                    "balance": 8800.0
+                },
+                {
+                    "date": "2025-11-12 12:38:06",
+                    "amount": 200.0,
+                    "type": "payment",
+                    "balance": 8600.0
+                },
+                {
+                    "date": "2025-11-12 13:05:56",
+                    "amount": 100.0,
+                    "type": "payment",
+                    "balance": 8500.0
+                }
+            ]
+        },
+        {
+            "phone": "8999149068",
+            "name": "Nikhil Motghare",
+            "fingerprint_id": 1,
+            "balance": 977.0,
+            "transactions": [
+                {
+                    "date": "2025-11-12 13:08:42",
+                    "amount": 1000.0,
+                    "type": "deposit",
+                    "balance": 1000.0
+                },
+                {
+                    "date": "2025-11-12 13:10:34",
+                    "amount": 23.0,
+                    "type": "payment",
+                    "balance": 977.0
                 }
             ]
         }

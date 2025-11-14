@@ -1,18 +1,205 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="row">
+    <div class="col-md-8">
         <div class="jumbotron">
             <h1 class="display-4">Welcome to Fingerprint Pay</h1>
             <p class="lead">Secure payments using fingerprint authentication</p>
             <hr class="my-4">
-            {% if not current_user.is_authenticated %}
-                <p>Please login to make payments or check your balance.</p>
-                <div class="btn-group">
-                    <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}" role="button">Login</a>
-                    <a class="btn btn-success btn-lg" href="{{ url_for('register') }}" role="button">Register New User</a>
+            
+            <!-- Payment Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Make Payment</h3>
                 </div>
-            {% else %}
-                <a class="btn btn-primary btn-lg" href="{{ url_for('dashboard') }}" role="button">Go to Dashboard</a>
-            {% endif %}
+                <div class="card-body">
+                    <form id="paymentForm">
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Phone Number</label>
+                            <input type="text" class="form-control" id="phone" name="phone" placeholder="e.g., 9876543210" pattern="[0-9]{10}" maxlength="10" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Amount (₹)</label>
+                            <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" placeholder="e.g., 100.00" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg" id="payButton">
+                            <span class="spinner-border spinner-border-sm d-none" id="loadingSpinner"></span>
+                            Place Fingerprint & Pay
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h4>New User?</h4>
+            </div>
+            <div class="card-body text-center">
+                <p>Register to start making payments</p>
+                <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">Register New User</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Error Modal -->
+<div class="modal fade" id="resultModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" id="modalHeader">
+                <h5 class="modal-title" id="modalTitle">Payment Result</h5>
+            </div>
+            <div class="modal-body text-center">
+                <div id="animationContainer">
+                    <div id="successAnimation" class="d-none">
+                        <div class="checkmark-container">
+                            <div class="checkmark">✓</div>
+                        </div>
+                    </div>
+                    <div id="failAnimation" class="d-none">
+                        <div class="cross-container">
+                            <div class="cross">✗</div>
+                        </div>
+                    </div>
+                </div>
+                <p id="resultMessage" class="mt-3"></p>
+                <p id="balanceInfo" class="text-muted"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.checkmark-container, .cross-container {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    position: relative;
+    animation: bounce 0.6s ease-in-out;
+}
+
+.checkmark-container {
+    background-color: #28a745;
+}
+
+.cross-container {
+    background-color: #dc3545;
+}
+
+.checkmark, .cross {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+@keyframes bounce {
+    0%, 20%, 60%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-20px); }
+    80% { transform: translateY(-10px); }
+}
+
+.jumbotron {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 2rem;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+</style>
+
+<script>
+document.getElementById('paymentForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const payButton = document.getElementById('payButton');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const phone = document.getElementById('phone').value;
+    const amount = document.getElementById('amount').value;
+    
+    // Show loading state
+    payButton.disabled = true;
+    loadingSpinner.classList.remove('d-none');
+    payButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+    
+    try {
+        const response = await fetch('/make_payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `phone=${encodeURIComponent(phone)}&amount=${encodeURIComponent(amount)}`
+        });
+        
+        const result = await response.json();
+        
+        // Reset button
+        payButton.disabled = false;
+        loadingSpinner.classList.add('d-none');
+        payButton.innerHTML = 'Place Fingerprint & Pay';
+        
+        // Show result modal
+        showResultModal(result);
+        
+        // Clear form if successful
+        if (result.success) {
+            document.getElementById('paymentForm').reset();
+        }
+        
+    } catch (error) {
+        // Reset button
+        payButton.disabled = false;
+        loadingSpinner.classList.add('d-none');
+        payButton.innerHTML = 'Place Fingerprint & Pay';
+        
+        showResultModal({
+            success: false,
+            message: 'Network error. Please try again.'
+        });
+    }
+});
+
+function showResultModal(result) {
+    const modal = new bootstrap.Modal(document.getElementById('resultModal'));
+    const modalHeader = document.getElementById('modalHeader');
+    const modalTitle = document.getElementById('modalTitle');
+    const resultMessage = document.getElementById('resultMessage');
+    const balanceInfo = document.getElementById('balanceInfo');
+    const successAnimation = document.getElementById('successAnimation');
+    const failAnimation = document.getElementById('failAnimation');
+    
+    // Reset animations
+    successAnimation.classList.add('d-none');
+    failAnimation.classList.add('d-none');
+    
+    if (result.success) {
+        modalHeader.className = 'modal-header bg-success text-white';
+        modalTitle.textContent = 'Payment Successful!';
+        successAnimation.classList.remove('d-none');
+        balanceInfo.textContent = result.new_balance ? `New Balance: ₹${result.new_balance.toFixed(2)}` : '';
+    } else {
+        modalHeader.className = 'modal-header bg-danger text-white';
+        modalTitle.textContent = 'Payment Failed';
+        failAnimation.classList.remove('d-none');
+        balanceInfo.textContent = '';
+    }
+    
+    resultMessage.textContent = result.message;
+    modal.show();
+}
+</script>
 {% endblock %}

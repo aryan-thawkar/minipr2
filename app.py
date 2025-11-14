@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import json
 import serial
@@ -13,10 +13,10 @@ import atexit
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-# Flask-Login setup
+# Flask-Login setup (only for admin)
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'admin_login'
 
 # Global serial connection
 ser = None
@@ -239,11 +239,11 @@ def load_user(user_id):
 def index():
     return render_template('index.html')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
+@app.route('/admin_login', methods=['GET', 'POST'])
+def admin_login():
     if request.method == 'POST':
         phone = request.form['phone']
-        password = request.form.get('password')  # Optional for admin login
+        password = request.form['password']
         
         # Check if admin login
         if phone == "admin":
@@ -254,95 +254,78 @@ def login():
                 return redirect(url_for('admin_dashboard'))
             else:
                 flash('Invalid admin credentials!')
-            return render_template('login.html', show_password=True)
+        else:
+            flash('Invalid credentials!')
+            
+    return render_template('admin_login.html')
+
+@app.route('/make_payment', methods=['GET', 'POST'])
+def make_payment():
+    if request.method == 'POST':
+        phone = request.form['phone']
+        amount = float(request.form['amount'])
         
-        # Regular user login
         users = load_users()
         user_data = next((user for user in users if user['phone'] == phone), None)
         
-        if user_data:
-            print("Verifying fingerprint...")
-            fingerprint_id, confidence = verify_fingerprint()
-            
-            if fingerprint_id is not None and fingerprint_id == user_data['fingerprint_id']:
-                user = User(user_data)
-                login_user(user)
-                return redirect(url_for('dashboard'))
-            else:
-                flash('Fingerprint verification failed!')
-        else:
-            flash('User not found!')
-            
-    # Show password field if admin is attempting to login
-    show_password = request.args.get('admin') == 'true'
-    return render_template('login.html', show_password=show_password)
-            
-    return render_template('login.html')
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    users = load_users()
-    user_data = next((user for user in users if user['phone'] == current_user.id), None)
-    
-    if user_data and user_data['transactions']:
-        df = pd.DataFrame(user_data['transactions'])
-        df['date'] = pd.to_datetime(df['date'])
-        fig = px.line(df, x='date', y='balance', title='Balance History')
-        graph_json = plotly.utils.PlotlyJSONEncoder().encode(fig)
-    else:
-        graph_json = None
-    
-    return render_template('dashboard.html', user=user_data, graph_json=graph_json)
-
-@app.route('/make_payment', methods=['GET', 'POST'])
-@login_required
-def make_payment():
-    if request.method == 'POST':
-        amount = float(request.form['amount'])
-        users = load_users()
-        user_idx = next((idx for idx, user in enumerate(users) 
-                        if user['phone'] == current_user.id), None)
+        if not user_data:
+            return jsonify({
+                'success': False, 
+                'message': 'Phone number not found! Please register first.'
+            })
         
-        if user_idx is not None:
-            if users[user_idx]['balance'] >= amount:
-                fingerprint_id, confidence = verify_fingerprint()
-                
-                if fingerprint_id is not None and fingerprint_id == users[user_idx]['fingerprint_id']:
-                    # Deduct from user's account
-                    users[user_idx]['balance'] -= amount
-                    transaction = {
-                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "amount": amount,
-                        "type": "payment",
-                        "balance": users[user_idx]['balance']
-                    }
-                    users[user_idx]['transactions'].append(transaction)
-                    save_users(users)
-                    
-                    # Credit admin's account
-                    admin_data = load_admin()
-                    admin_data['balance'] += amount
-                    transaction = {
-                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "amount": amount,
-                        "type": "receive",
-                        "from": users[user_idx]['name'],
-                        "balance": admin_data['balance']
-                    }
-                    admin_data['transactions'].append(transaction)
-                    save_admin(admin_data)
-                    
-                    flash('Payment successful!')
-                    return redirect(url_for('dashboard'))
-                else:
-                    flash('Fingerprint verification failed!')
-            else:
-                flash('Insufficient balance!')
-        else:
-            flash('User not found!')
+        if user_data['balance'] < amount:
+            return jsonify({
+                'success': False, 
+                'message': 'Insufficient balance!'
+            })
+        
+        print("Verifying fingerprint...")
+        fingerprint_id, confidence = verify_fingerprint()
+        
+        if fingerprint_id is not None and fingerprint_id == user_data['fingerprint_id']:
+            # Find user index and update balance
+            user_idx = next((idx for idx, user in enumerate(users) 
+                            if user['phone'] == phone), None)
             
+            # Deduct from user's account
+            users[user_idx]['balance'] -= amount
+            transaction = {
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "amount": amount,
+                "type": "payment",
+                "balance": users[user_idx]['balance']
+            }
+            users[user_idx]['transactions'].append(transaction)
+            save_users(users)
+            
+            # Credit admin's account
+            admin_data = load_admin()
+            admin_data['balance'] += amount
+            transaction = {
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "amount": amount,
+                "type": "receive",
+                "from": user_data['name'],
+                "balance": admin_data['balance']
+            }
+            admin_data['transactions'].append(transaction)
+            save_admin(admin_data)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Payment of ₹{amount:.2f} successful!',
+                'new_balance': users[user_idx]['balance']
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'message': 'Fingerprint verification failed!'
+            })
+    
     return render_template('make_payment.html')
+
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -386,8 +369,8 @@ def register():
             users.append(new_user)
             save_users(users)
             
-            flash('Registration successful! You can now login.')
-            return redirect(url_for('login'))
+            flash('Registration successful! You can now make payments.')
+            return redirect(url_for('index'))
         else:
             flash('Fingerprint enrollment failed! Please try again.')
             return render_template('register.html')
@@ -399,7 +382,7 @@ def register():
 def admin_dashboard():
     if not current_user.is_admin:
         flash('Access denied!')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     
     admin_data = load_admin()
     

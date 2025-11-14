@@ -18,15 +18,15 @@
                         <form method="POST">
                             <div class="mb-3">
                                 <label for="name" class="form-label">Full Name</label>
-                                <input type="text" class="form-control" id="name" name="name" required>
+                                <input type="text" class="form-control" id="name" name="name" placeholder="Enter your full name" required>
                             </div>
                             <div class="mb-3">
                                 <label for="phone" class="form-label">Phone Number</label>
-                                <input type="text" class="form-control" id="phone" name="phone" required>
+                                <input type="text" class="form-control" id="phone" name="phone" placeholder="e.g., 9876543210" pattern="[0-9]{10}" maxlength="10" required>
                             </div>
                             <div class="mb-3">
                                 <label for="initial_balance" class="form-label">Initial Balance (₹)</label>
-                                <input type="number" step="0.01" class="form-control" id="initial_balance" name="initial_balance" required>
+                                <input type="number" step="0.01" class="form-control" id="initial_balance" name="initial_balance" placeholder="e.g., 1000.00" min="1" required>
                             </div>
                             <div class="alert alert-info">
                                 <h5>Fingerprint Enrollment Instructions:</h5>
